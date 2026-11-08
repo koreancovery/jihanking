@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sky Glider - 스카이 글라이더</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Press Start 2P for retro arcade feel & Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .arcade-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #1e3c72 0%, #2a5298 50%, #7db9e8 100%);
+            display: block;
+        }
+        /* Canvas glass container glow */
+        .game-card {
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-2 md:p-4 overflow-x-hidden">
+
+    <!-- Header / Title -->
+    <header class="text-center mb-3">
+        <h1 class="arcade-font text-2xl md:text-4xl text-amber-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] tracking-wider flex items-center justify-center gap-3">
+            <i class="fa-solid fa-plane-departure text-sky-400"></i> SKY GLIDER
+        </h1>
+        <p class="text-slate-400 text-xs md:text-sm mt-1">스페이스바로 고도를 높여 가능한 멀리 비행하세요!</p>
+    </header>
+
+    <!-- Main Game Wrapper -->
+    <main class="relative w-full max-w-4xl bg-slate-800/80 rounded-2xl p-2 md:p-4 backdrop-blur border border-slate-700 game-card flex flex-col items-center">
+        
+        <!-- Canvas Container -->
+        <div class="relative w-full aspect-[16/9] max-h-[70vh] rounded-xl overflow-hidden shadow-inner border border-slate-600 bg-slate-950">
+            
+            <!-- Main Game Canvas -->
+            <canvas id="gameCanvas" class="w-full h-full"></canvas>
+
+            <!-- HUD Overlay -->
+            <div id="hud" class="absolute top-0 left-0 right-0 p-3 md:p-4 flex justify-between items-start pointer-events-none hidden">
+                <!-- Left: Fuel Gauge -->
+                <div class="bg-slate-900/80 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl w-44 md:w-56 shadow-lg">
+                    <div class="flex justify-between items-center mb-1 text-xs md:text-sm font-bold">
+                        <span class="text-amber-400 flex items-center gap-1">
+                            <i class="fa-solid fa-gas-pump"></i> 연료 (FUEL)
+                        </span>
+                        <span id="fuelText" class="arcade-font text-xs text-white">30.0s</span>
+                    </div>
+                    <!-- Progress bar -->
+                    <div class="w-full bg-slate-700 h-3 md:h-4 rounded-full overflow-hidden p-0.5 border border-slate-600">
+                        <div id="fuelBar" class="h-full bg-emerald-500 rounded-full transition-all duration-100" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Right: Flight Stats (Distance, Speed, Altitude) -->
+                <div class="bg-slate-900/80 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl shadow-lg text-right flex flex-col items-end gap-1">
+                    <div class="arcade-font text-lg md:text-2xl text-amber-300 drop-shadow">
+                        <span id="distanceScore">0</span> <span class="text-xs text-amber-400 font-normal">m</span>
+                    </div>
+                    <div class="text-[10px] md:text-xs text-slate-300 flex items-center gap-3 font-semibold">
+                        <span><i class="fa-solid fa-arrows-up-down text-sky-400"></i> 고도: <span id="altitudeText" class="text-white">0</span>m</span>
+                        <span><i class="fa-solid fa-gauge-high text-emerald-400"></i> 속도: <span id="speedText" class="text-white">240</span>km/h</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start / Instructions Overlay -->
+            <div id="startScreen" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10">
+                <div class="w-20 h-20 bg-sky-500/20 border-2 border-sky-400 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                    <i class="fa-solid fa-plane text-4xl text-sky-400"></i>
+                </div>
+                <h2 class="arcade-font text-xl md:text-3xl text-amber-400 mb-2">무한 비행 도전</h2>
+                <p class="text-slate-300 max-w-md text-xs md:text-sm mb-6 leading-relaxed">
+                    스페이스키 또는 화면 터치로 비행기 고도를 상승시키세요.<br/>
+                    연료는 계속 소모됩니다. <strong>연료통(+15초)</strong>을 먹고 <strong>장애물</strong>을 피해 최대한 멀리 날아가세요!
+                </p>
+
+                <!-- Key Instructions Legend -->
+                <div class="grid grid-cols-2 gap-3 max-w-xs w-full mb-6 text-xs text-slate-300">
+                    <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-lg flex items-center justify-center gap-2">
+                        <kbd class="bg-slate-700 px-2 py-1 rounded text-white font-mono border border-slate-500 shadow">SPACE</kbd>
+                        <span>상승 (Climb)</span>
+                    </div>
+                    <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-lg flex items-center justify-center gap-2">
+                        <span class="text-slate-400">RELEASE</span>
+                        <span>강하 (Glide)</span>
+                    </div>
+                </div>
+
+                <button id="startBtn" class="arcade-font bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold px-8 py-4 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer">
+                    GAME START <i class="fa-solid fa-play ml-2"></i>
+                </button>
+            </div>
+
+            <!-- Game Over / Leaderboard Modal -->
+            <div id="gameOverScreen" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4 md:p-6 text-center z-20 hidden">
+                <h2 class="arcade-font text-2xl md:text-3xl text-red-500 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> GAME OVER
+                </h2>
+                <p id="gameOverReason" class="text-slate-400 text-xs md:text-sm mb-3">비행기가 추락하였습니다!</p>
+
+                <!-- Final Score Board -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-4 w-full max-w-md mb-4 shadow-xl">
+                    <div class="text-xs text-slate-400 uppercase tracking-widest mb-1">최종 비행 거리</div>
+                    <div id="finalScore" class="arcade-font text-3xl md:text-4xl text-amber-300 mb-4">0 m</div>
+
+                    <!-- Leaderboard Entry Form -->
+                    <form id="scoreForm" class="flex flex-col gap-2">
+                        <label class="text-left text-xs text-slate-300 font-semibold" for="playerName">기록 저장 (조종사 이름):</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="playerName" maxlength="10" placeholder="조종사 이름 (최대 10자)" required
+                                class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400 flex-1">
+                            <button type="submit" id="submitScoreBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all flex items-center gap-1 cursor-pointer">
+                                <i class="fa-solid fa-check"></i> 저장
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Leaderboard Display -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 w-full max-w-md max-h-40 overflow-y-auto mb-4 text-left">
+                    <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        <span><i class="fa-solid fa-trophy text-amber-400 mr-1"></i> 명예의 전당 (Top 5)</span>
+                        <span class="text-[10px] text-slate-500">순위</span>
+                    </h3>
+                    <div id="leaderboardList" class="space-y-1 text-xs text-slate-300">
+                        <!-- Dynamically generated -->
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-3">
+                    <button id="restartBtn" class="arcade-font bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer text-xs md:text-sm">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> 다시 시도
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Touch Controls Hint for Mobile -->
+        <div class="w-full mt-3 flex justify-between items-center text-xs text-slate-400 px-2">
+            <span class="flex items-center gap-1"><i class="fa-solid fa-keyboard"></i> PC: 스페이스바 누르기</span>
+            <span class="flex items-center gap-1"><i class="fa-solid fa-hand-pointer"></i> 모바일: 화면 누르기</span>
+        </div>
+    </main>
+
+    <!-- Game Logic JavaScript -->
+    <script>
+        // --- Game Configuration & Constants ---
+        const MAX_FUEL = 30.0; // Max fuel in seconds
+        const FUEL_CANISTER_REFILL = 15.0; // Refill amount in seconds
+        const OBSTACLE_INTERVAL = 5.0; // Base spawn obstacle interval (~5 sec)
+        const FUEL_SPAWN_INTERVAL = 16.0; // Spawn fuel every ~16 sec (Updated from 20s)
+
+        // --- Canvas Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- UI Elements ---
+        const hud = document.getElementById('hud');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const fuelBar = document.getElementById('fuelBar');
+        const fuelText = document.getElementById('fuelText');
+        const distanceScore = document.getElementById('distanceScore');
+        const altitudeText = document.getElementById('altitudeText');
+        const speedText = document.getElementById('speedText');
+        const finalScore = document.getElementById('finalScore');
+        const gameOverReason = document.getElementById('gameOverReason');
+        const scoreForm = document.getElementById('scoreForm');
+        const playerNameInput = document.getElementById('playerName');
+        const leaderboardList = document.getElementById('leaderboardList');
+
+        // --- Game State Variables ---
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let lastTime = 0;
+        let isSpacePressed = false;
+
+        // Player / Plane Object
+        let plane = {
+            x: 100,
+            y: 200,
+            width: 50,
+            height: 28,
+            vy: 0,
+            gravity: 450,       // Downward acceleration (px/s^2)
+            thrust: -850,       // Upward acceleration when space pressed (px/s^2)
+            maxSpeedY: 400,
+            rotation: 0
+        };
+
+        // World Parameters
+        let distance = 0;       // Distance in meters
+        let speed = 250;        // Horizontal flight speed (px/sec equivalent)
+        let fuel = MAX_FUEL;    // Fuel timer in seconds
+        let obstacleTimer = 0;  // Seconds until next obstacle
+        let fuelTimer = 0;      // Seconds until next fuel item
+
+        // Entities Arrays
+        let obstacles = [];
+        let fuelItems = [];
+        let clouds = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // --- Cloud Background Generator ---
+        function initClouds() {
+            clouds = [];
+            for (let i = 0; i < 8; i++) {
+                clouds.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * (canvas.height * 0.7),
+                    width: 80 + Math.random() * 100,
+                    height: 30 + Math.random() * 30,
+                    speed: 20 + Math.random() * 40,
+                    opacity: 0.3 + Math.random() * 0.4
+                });
+            }
+        }
+
+        // --- Input Listeners ---
+        function handleInputStart(e) {
+            // Prevent default scrolling on spacebar/touch
+            if (e.code === 'Space' || e.type === 'touchstart') {
+                isSpacePressed = true;
+                if (e.type === 'touchstart' && e.target === canvas) {
+                    e.preventDefault();
+                }
+            }
+        }
+
+        function handleInputEnd(e) {
+            if (e.code === 'Space' || e.type === 'touchend') {
+                isSpacePressed = false;
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') handleInputStart(e);
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') handleInputEnd(e);
+        });
+
+        // Touch support for mobile canvas interaction
+        canvas.addEventListener('touchstart', handleInputStart, { passive: false });
+        canvas.addEventListener('touchend', handleInputEnd);
+
+        // Buttons
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+        scoreForm.addEventListener('submit', handleScoreSubmit);
+
+        // --- Start Game Function ---
+        function startGame() {
+            gameState = 'PLAYING';
+            fuel = MAX_FUEL;
+            distance = 0;
+            obstacleTimer = OBSTACLE_INTERVAL; 
+            fuelTimer = FUEL_SPAWN_INTERVAL * 0.5; // First fuel canister appears a bit earlier
+            
+            plane.y = canvas.height / 2;
+            plane.vy = 0;
+            plane.rotation = 0;
+
+            obstacles = [];
+            fuelItems = [];
+            particles = [];
+            floatingTexts = [];
+
+            initClouds();
+
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') return;
+
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Delta time in seconds
+            lastTime = timestamp;
+
+            update(dt);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Update Logic ---
+        function update(dt) {
+            // 1. Update Distance & Fuel
+            distance += speed * dt * 0.15;
+            fuel -= dt;
+
+            if (fuel <= 0) {
+                fuel = 0;
+                triggerGameOver("연료가 모두 소진되어 추락했습니다!");
+                return;
+            }
+
+            // Update Fuel UI
+            const fuelPercent = Math.max(0, (fuel / MAX_FUEL) * 100);
+            fuelBar.style.width = `${fuelPercent}%`;
+            fuelText.textContent = `${fuel.toFixed(1)}s`;
+
+            // Dynamic color change for low fuel
+            if (fuel < 7) {
+                fuelBar.className = "h-full bg-red-500 rounded-full transition-all duration-100 animate-pulse";
+            } else if (fuel < 15) {
+                fuelBar.className = "h-full bg-amber-400 rounded-full transition-all duration-100";
+            } else {
+                fuelBar.className = "h-full bg-emerald-500 rounded-full transition-all duration-100";
+            }
+
+            distanceScore.textContent = Math.floor(distance);
+            altitudeText.textContent = Math.floor(canvas.height - plane.y - plane.height);
+            speedText.textContent = Math.floor(speed);
+
+            // 2. Plane Physics
+            if (isSpacePressed) {
+                plane.vy += plane.thrust * dt;
+                // Create thruster smoke particles
+                if (Math.random() < 0.6) {
+                    particles.push({
+                        x: plane.x - 5,
+                        y: plane.y + plane.height / 2 + (Math.random() * 6 - 3),
+                        vx: -150 - Math.random() * 50,
+                        vy: Math.random() * 40 - 20,
+                        radius: 3 + Math.random() * 4,
+                        color: 'rgba(245, 158, 11, ',
+                        alpha: 0.8,
+                        life: 0.4
+                    });
+                }
+            } else {
+                plane.vy += plane.gravity * dt;
+            }
+
+            // Clamp vertical speed
+            plane.vy = Math.max(-plane.maxSpeedY, Math.min(plane.maxSpeedY, plane.vy));
+            plane.y += plane.vy * dt;
+
+            // Pitch rotation based on vertical velocity
+            plane.rotation = Math.max(-0.4, Math.min(0.4, plane.vy * 0.0012));
+
+            // Ground & Ceiling Collisions
+            const minY = 10;
+            const maxY = canvas.height - plane.height - 25; // Keep space for ground visual
+
+            if (plane.y < minY) {
+                plane.y = minY;
+                plane.vy = 0;
+            }
+            if (plane.y > maxY) {
+                plane.y = maxY;
+                triggerGameOver("지면에 충돌하였습니다!");
+                return;
+            }
+
+            // 3. Spawn Logic
+            // Spawning Obstacles (~5 seconds)
+            obstacleTimer -= dt;
+            if (obstacleTimer <= 0) {
+                spawnObstacle();
+
+                // 2500m 이상일 경우 추가 장애물 스폰 (2개 이상 동시/연속 배치)
+                if (distance >= 2500) {
+                    // 60% 확률로 2번째 장애물, 30% 확률로 3번째 장애물 스폰
+                    setTimeout(() => { if (gameState === 'PLAYING') spawnObstacle(80); }, 300);
+                    if (Math.random() < 0.4) {
+                        setTimeout(() => { if (gameState === 'PLAYING') spawnObstacle(160); }, 600);
+                    }
+                    obstacleTimer = (OBSTACLE_INTERVAL * 0.7) + (Math.random() * 1.0 - 0.5); // 난이도 상승에 따른 쿨다운 감소
+                } else {
+                    obstacleTimer = OBSTACLE_INTERVAL + (Math.random() * 1.5 - 0.75); // 기본 Random variation
+                }
+            }
+
+            // Spawning Fuel Canisters (~16 seconds)
+            fuelTimer -= dt;
+            if (fuelTimer <= 0) {
+                spawnFuelItem();
+                fuelTimer = FUEL_SPAWN_INTERVAL + (Math.random() * 2 - 1.0);
+            }
+
+            // 4. Update Clouds
+            clouds.forEach(cloud => {
+                cloud.x -= cloud.speed * dt;
+                if (cloud.x + cloud.width < 0) {
+                    cloud.x = canvas.width + Math.random() * 50;
+                    cloud.y = Math.random() * (canvas.height * 0.7);
+                }
+            });
+
+            // 5. Update Obstacles & Movement Patterns & Collision Check
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= speed * dt;
+
+                // 3500m 이상 진입 시 패턴별 동적 이동 처리
+                if (distance >= 3500 && obs.pattern !== 'static') {
+                    obs.time += dt;
+                    
+                    if (obs.pattern === 'wave') {
+                        // 위아래 사인파 파동 이동
+                        obs.y = obs.baseY + Math.sin(obs.time * obs.frequency) * obs.amplitude;
+                    } else if (obs.pattern === 'diagonal') {
+                        // 사선 이동 (바운스)
+                        obs.y += obs.moveDir * obs.vy * dt;
+                        if (obs.y < 20 || obs.y > canvas.height - obs.height - 30) {
+                            obs.moveDir *= -1; // 벽에 부딪히면 반전
+                        }
+                    } else if (obs.pattern === 'circle') {
+                        // 원형 요동 궤도 이동
+                        obs.y = obs.baseY + Math.sin(obs.time * obs.frequency) * obs.amplitude;
+                        obs.x += Math.cos(obs.time * obs.frequency) * (obs.amplitude * 0.3) * dt * 60;
+                    }
+
+                    // 산봉우리 타입이 아닐 때만 고도 제한 보정
+                    if (obs.type !== 1) {
+                        obs.y = Math.max(20, Math.min(canvas.height - obs.height - 30, obs.y));
+                    }
+                }
+
+                // Collision detection (AABB with inner padding for precision)
+                const pad = 6;
+                if (
+                    plane.x + pad < obs.x + obs.width - pad &&
+                    plane.x + plane.width - pad > obs.x + pad &&
+                    plane.y + pad < obs.y + obs.height - pad &&
+                    plane.y + plane.height - pad > obs.y + pad
+                ) {
+                    createExplosion(plane.x + plane.width / 2, plane.y + plane.height / 2);
+                    triggerGameOver("장애물과 충돌하였습니다!");
+                    return;
+                }
+
+                // Remove off-screen obstacles
+                if (obs.x + obs.width < -50) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // 6. Update Fuel Items & Collection
+            for (let i = fuelItems.length - 1; i >= 0; i--) {
+                let item = fuelItems[i];
+                item.x -= speed * dt;
+
+                // Floating sine wave animation for fuel items
+                item.animY = item.y + Math.sin(performance.now() * 0.005 + item.x) * 8;
+
+                // Check collision with player
+                const dx = (plane.x + plane.width / 2) - (item.x + item.width / 2);
+                const dy = (plane.y + plane.height / 2) - (item.animY + item.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < (plane.width / 2 + item.width / 2)) {
+                    // Refill Fuel
+                    fuel = Math.min(MAX_FUEL, fuel + FUEL_CANISTER_REFILL);
+                    
+                    // Show floating indicator text
+                    floatingTexts.push({
+                        x: item.x,
+                        y: item.animY,
+                        text: "+15초 연료!",
+                        color: "#10B981",
+                        alpha: 1.0,
+                        vy: -40
+                    });
+
+                    // Sparkle particles
+                    for (let k = 0; k < 12; k++) {
+                        particles.push({
+                            x: item.x + 15,
+                            y: item.animY + 15,
+                            vx: (Math.random() - 0.5) * 200,
+                            vy: (Math.random() - 0.5) * 200,
+                            radius: 2 + Math.random() * 3,
+                            color: 'rgba(16, 185, 129, ',
+                            alpha: 1.0,
+                            life: 0.6
+                        });
+                    }
+
+                    fuelItems.splice(i, 1);
+                    continue;
+                }
+
+                // Remove off-screen
+                if (item.x + item.width < -50) {
+                    fuelItems.splice(i, 1);
+                }
+            }
+
+            // 7. Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.alpha -= dt / p.life;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // 8. Update Floating Texts
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ft.y += ft.vy * dt;
+                ft.alpha -= dt;
+                if (ft.alpha <= 0) {
+                    floatingTexts.splice(i, 1);
+                }
+            }
+        }
+
+        // --- Spawner Functions ---
+        function spawnObstacle(offsetX = 0) {
+            // Types: 0 = Thundercloud/Storm, 1 = Mountain Peak, 2 = Hot Air Balloon
+            const type = Math.floor(Math.random() * 3);
+            let yPos, w, h;
+
+            if (type === 0) { // Storm Cloud
+                w = 70; h = 70;
+                yPos = 30 + Math.random() * (canvas.height - 180);
+            } else if (type === 1) { // Mountain Peak from bottom
+                w = 80; h = 120 + Math.random() * 60;
+                yPos = canvas.height - h;
+            } else { // Hot Air Balloon
+                w = 50; h = 70;
+                yPos = 40 + Math.random() * (canvas.height - 200);
+            }
+
+            // 3500m 이상일 때 다양한 이동 패턴 부여
+            let pattern = 'static';
+            let amplitude = 0;
+            let frequency = 0;
+            let moveDir = 1;
+            let vy = 0;
+
+            if (distance >= 3500) {
+                const patterns = ['wave', 'diagonal', 'circle'];
+                // 산봉우리(type 1)는 바닥 고정이 자연스러우므로 파동/원형 위주, 나머지는 랜덤
+                pattern = patterns[Math.floor(Math.random() * patterns.length)];
+                
+                amplitude = 30 + Math.random() * 40; // 이동 폭
+                frequency = 2.0 + Math.random() * 2.5; // 이동 속도 (주기)
+                moveDir = Math.random() < 0.5 ? 1 : -1;
+                vy = 60 + Math.random() * 80; // 사선 이동 속도
+            }
+
+            obstacles.push({
+                x: canvas.width + 50 + offsetX,
+                y: yPos,
+                baseY: yPos,
+                width: w,
+                height: h,
+                type: type,
+                pattern: pattern,
+                time: 0,
+                amplitude: amplitude,
+                frequency: frequency,
+                moveDir: moveDir,
+                vy: vy
+            });
+        }
+
+        function spawnFuelItem() {
+            fuelItems.push({
+                x: canvas.width + 50,
+                y: 50 + Math.random() * (canvas.height - 180),
+                width: 34,
+                height: 40,
+                animY: 0
+            });
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 35; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const spd = 50 + Math.random() * 250;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    radius: 3 + Math.random() * 5,
+                    color: Math.random() > 0.5 ? 'rgba(239, 68, 68, ' : 'rgba(245, 158, 11, ',
+                    alpha: 1.0,
+                    life: 0.8
+                });
+            }
+        }
+
+        // --- Render Functions ---
+        function render() {
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Sky Gradient & Sun
+            drawBackground();
+
+            // Draw Clouds
+            clouds.forEach(drawCloud);
+
+            // Draw Ground Mountains in Distant Background
+            drawDistantMountains();
+
+            // Draw Obstacles
+            obstacles.forEach(drawObstacle);
+
+            // Draw Fuel Items
+            fuelItems.forEach(drawFuelItem);
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color + p.alpha + ')';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Player Plane
+            drawAirplane(plane.x, plane.y, plane.width, plane.height, plane.rotation);
+
+            // Draw Floating Texts
+            floatingTexts.forEach(ft => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, ft.alpha);
+                ctx.font = 'bold 16px Pretendard, sans-serif';
+                ctx.fillStyle = ft.color;
+                ctx.shadowColor = 'black';
+                ctx.shadowBlur = 4;
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+            });
+        }
+
+        function drawBackground() {
+            // Sun reflection
+            const gradient = ctx.createRadialGradient(
+                canvas.width * 0.8, 80, 10,
+                canvas.width * 0.8, 80, 200
+            );
+            gradient.addColorStop(0, 'rgba(254, 240, 138, 0.4)');
+            gradient.addColorStop(1, 'rgba(254, 240, 138, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawDistantMountains() {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            for (let i = 0; i <= canvas.width; i += 100) {
+                const h = Math.sin(i * 0.005) * 40 + 60;
+                ctx.lineTo(i, canvas.height - h);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Ground strip
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 4);
+        }
+
+        function drawCloud(c) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.height * 0.8, 0, Math.PI * 2);
+            ctx.arc(c.x + c.width * 0.3, c.y - c.height * 0.2, c.height, 0, Math.PI * 2);
+            ctx.arc(c.x + c.width * 0.6, c.y, c.height * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawAirplane(x, y, w, h, rot) {
+            ctx.save();
+            ctx.translate(x + w / 2, y + h / 2);
+            ctx.rotate(rot);
+
+            // Plane Body (Red Arcade Style)
+            ctx.fillStyle = '#ef4444'; // Red fuselage
+            ctx.beginPath();
+            ctx.ellipse(0, 0, w / 2, h / 2.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Nose Cone
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(w / 2 - 2, 0, 6, -Math.PI / 2, Math.PI / 2);
+            ctx.fill();
+
+            // Cockpit Canopy (Glass)
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.ellipse(6, -4, 10, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main Wings
+            ctx.fillStyle = '#dc2626';
+            ctx.fillRect(-8, -h / 2 - 4, 14, h + 8);
+            ctx.fillStyle = '#b91c1c';
+            ctx.fillRect(-6, -h / 2 - 4, 4, h + 8);
+
+            // Tail Fin
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.moveTo(-w / 2 + 4, -2);
+            ctx.lineTo(-w / 2 - 6, -h / 1.5);
+            ctx.lineTo(-w / 2 + 6, -h / 1.5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Propeller
+            const propSpin = (performance.now() * 0.05) % (Math.PI * 2);
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(w / 2 + 2, -Math.sin(propSpin) * 14);
+            ctx.lineTo(w / 2 + 2, Math.sin(propSpin) * 14);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawObstacle(obs) {
+            ctx.save();
+            if (obs.type === 0) { // Storm Cloud with Lightning
+                ctx.fillStyle = '#334155';
+                ctx.beginPath();
+                ctx.arc(obs.x + 35, obs.y + 35, 30, 0, Math.PI * 2);
+                ctx.arc(obs.x + 20, obs.y + 40, 22, 0, Math.PI * 2);
+                ctx.arc(obs.x + 50, obs.y + 40, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Lightning Icon
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.moveTo(obs.x + 35, obs.y + 30);
+                ctx.lineTo(obs.x + 25, obs.y + 50);
+                ctx.lineTo(obs.x + 33, obs.y + 50);
+                ctx.lineTo(obs.x + 28, obs.y + 68);
+                ctx.lineTo(obs.x + 45, obs.y + 44);
+                ctx.lineTo(obs.x + 37, obs.y + 44);
+                ctx.closePath();
+                ctx.fill();
+            } else if (obs.type === 1) { // Rocky Peak
+                ctx.fillStyle = '#475569';
+                ctx.beginPath();
+                ctx.moveTo(obs.x, obs.y + obs.height);
+                ctx.lineTo(obs.x + obs.width / 2, obs.y);
+                ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // Snow Peak Top
+                ctx.fillStyle = '#f8fafc';
+                ctx.beginPath();
+                ctx.moveTo(obs.x + obs.width / 2 - 15, obs.y + 35);
+                ctx.lineTo(obs.x + obs.width / 2, obs.y);
+                ctx.lineTo(obs.x + obs.width / 2 + 15, obs.y + 35);
+                ctx.closePath();
+                ctx.fill();
+            } else { // Hot Air Balloon
+                // Balloon top
+                ctx.fillStyle = '#ea580c';
+                ctx.beginPath();
+                ctx.arc(obs.x + 25, obs.y + 25, 25, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Yellow Stripes
+                ctx.fillStyle = '#facc15';
+                ctx.fillRect(obs.x + 18, obs.y, 14, 50);
+
+                // Basket
+                ctx.fillStyle = '#78350f';
+                ctx.fillRect(obs.x + 20, obs.y + 58, 10, 10);
+
+                // Ropes
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(obs.x + 10, obs.y + 40);
+                ctx.lineTo(obs.x + 20, obs.y + 58);
+                ctx.moveTo(obs.x + 40, obs.y + 40);
+                ctx.lineTo(obs.x + 30, obs.y + 58);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawFuelItem(item) {
+            const y = item.animY;
+            ctx.save();
+
+            // Glow Aura
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 12;
+
+            // Fuel Canister Body (Emerald)
+            ctx.fillStyle = '#10b981';
+            ctx.beginPath();
+            ctx.roundRect(item.x, y + 6, item.width, item.height - 6, 6);
+            ctx.fill();
+
+            // Handle & Cap
+            ctx.fillStyle = '#065f46';
+            ctx.fillRect(item.x + 6, y, 10, 6);
+            ctx.fillRect(item.x + item.width - 12, y, 6, 6);
+
+            // Icon / Text on Canister
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAS', item.x + item.width / 2, y + 28);
+
+            ctx.restore();
+        }
+
+        // --- Game Over & Leaderboard Logic ---
+        function triggerGameOver(reason) {
+            gameState = 'GAMEOVER';
+            gameOverReason.textContent = reason;
+            finalScore.textContent = `${Math.floor(distance)} m`;
+
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+
+            renderLeaderboard();
+        }
+
+        function getLeaderboard() {
+            const saved = localStorage.getItem('sky_glider_leaderboard');
+            return saved ? JSON.parse(saved) : [
+                { name: 'Ace Pilot', score: 1250 },
+                { name: 'Sky Walker', score: 890 },
+                { name: 'Maverick', score: 620 }
+            ];
+        }
+
+        function saveLeaderboard(board) {
+            localStorage.setItem('sky_glider_leaderboard', JSON.stringify(board));
+        }
+
+        function renderLeaderboard() {
+            const board = getLeaderboard();
+            leaderboardList.innerHTML = '';
+
+            board.sort((a, b) => b.score - a.score);
+
+            board.slice(0, 5).forEach((entry, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center bg-slate-800/80 px-3 py-1.5 rounded border border-slate-700/50';
+                
+                let badgeColor = 'text-slate-400';
+                if (index === 0) badgeColor = 'text-amber-400 font-bold';
+                else if (index === 1) badgeColor = 'text-slate-300 font-bold';
+                else if (index === 2) badgeColor = 'text-amber-600 font-bold';
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="${badgeColor} w-4 text-center font-mono">${index + 1}</span>
+                        <span class="font-semibold text-white">${escapeHtml(entry.name)}</span>
+                    </div>
+                    <span class="arcade-font text-amber-300 text-[11px]">${entry.score} m</span>
+                `;
+                leaderboardList.appendChild(item);
+            });
+        }
+
+        function handleScoreSubmit(e) {
+            e.preventDefault();
+            const name = playerNameInput.value.trim() || '익명 조종사';
+            const currentScore = Math.floor(distance);
+
+            let board = getLeaderboard();
+            board.push({ name: name, score: currentScore });
+            board.sort((a, b) => b.score - a.score);
+            board = board.slice(0, 10); // Keep top 10
+
+            saveLeaderboard(board);
+            renderLeaderboard();
+
+            // Disable form inputs to prevent double submission
+            playerNameInput.disabled = true;
+            document.getElementById('submitScoreBtn').disabled = true;
+            document.getElementById('submitScoreBtn').classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+
+        // Initialize Canvas size & Render initial background
+        initClouds();
+        render();
+    </script>
+</body>
+</html>
